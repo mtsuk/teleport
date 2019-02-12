@@ -70,11 +70,19 @@ var (
 			Help: "Number of open audit files",
 		},
 	)
+
+	auditFailedEmit = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "audit_failed_emit_events",
+			Help: "Number of times emitting audit event failed.",
+		},
+	)
 )
 
 func init() {
-	// Metrics have to be registered to be exposed:
+	// Metrics have to be registered to be exposed.
 	prometheus.MustRegister(auditOpenFiles)
+	prometheus.MustRegister(auditFailedEmit)
 }
 
 // AuditLog is a new combined facility to record Teleport events and
@@ -840,12 +848,27 @@ func (l *AuditLog) fetchSessionEvents(fileName string, afterN int) ([]EventField
 	return retval, nil
 }
 
-// EmitAuditEvent adds a new event to the log. Part of auth.IAuditLog interface.
+// EmitAuditEvent adds a new event to the log. If emitting fails, a Prometheus
+// counter is incremented.
 func (l *AuditLog) EmitAuditEvent(eventType string, fields EventFields) error {
+	// If an external logger has been set, use it as the emitter, otherwise
+	// fallback to the local disk based emitter.
+	var emitAuditEvent func(eventType string, fields EventFields) error
 	if l.ExternalLog != nil {
-		return l.ExternalLog.EmitAuditEvent(eventType, fields)
+		emitAuditEvent = l.ExternalLog.EmitAuditEvent
+	} else {
+		emitAuditEvent = l.localLog.EmitAuditEvent
 	}
-	return l.localLog.EmitAuditEvent(eventType, fields)
+
+	// Emit the event. If it fails for any reason a Prometheus counter is
+	// incremented.
+	err := emitAuditEvent(eventType, fields)
+	if err != nil {
+		auditFailedEmit.Inc()
+		return trace.Wrap(err)
+	}
+
+	return nil
 }
 
 // emitEvent emits event for test purposes

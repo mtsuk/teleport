@@ -1429,6 +1429,12 @@ func (process *TeleportProcess) initDiagnosticService() error {
 		trace.Component: teleport.Component(teleport.ComponentDiagnostic, process.id),
 	})
 
+	// Monitor disk space in Teleport data directory and emit to Prometheus.
+	process.RegisterFunc("disk.monitor", func() error {
+		startDiskMonitor(process)
+		return nil
+	})
+
 	// Create a state machine that will process and update the internal state of
 	// Teleport based off Events. Use this state machine to return return the
 	// status from the /readyz endpoint.
