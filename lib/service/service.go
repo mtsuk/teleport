@@ -959,7 +959,7 @@ func (process *TeleportProcess) initAuthService() error {
 	}
 
 	var authCache auth.AuthCache
-	if !process.Config.CachePolicy.Enabled {
+	if process.Config.CachePolicy.Enabled {
 		cache, err := process.newAccessCache(authServer.AuthServices, cache.ForAuth, []string{teleport.ComponentAuth}, true)
 		if err != nil {
 			return trace.Wrap(err)
