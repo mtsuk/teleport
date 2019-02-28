@@ -70,7 +70,7 @@ var log = logrus.WithFields(logrus.Fields{
 })
 
 const (
-	// Directory location where tsh profiles (and session keys) are stored
+	// ProfileDir is the directory where tsh profiles and certificates are stored.
 	ProfileDir = ".tsh"
 )
 
@@ -240,6 +240,9 @@ type Config struct {
 	// CheckVersions will check that client version is compatible
 	// with auth server version when connecting.
 	CheckVersions bool
+}
+
+func (c *Config) CheckAndSetDefaults() error {
 }
 
 // CachePolicy defines cache policy for local clients
@@ -679,6 +682,11 @@ type ShellCreatedCallback func(s *ssh.Session, c *ssh.Client, terminal io.ReadWr
 
 // NewClient creates a TeleportClient object and fully configures it
 func NewClient(c *Config) (tc *TeleportClient, err error) {
+	err := c.CheckAndSetDefaults()
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
+
 	// validate configuration
 	if c.Username == "" {
 		c.Username, err = Username()

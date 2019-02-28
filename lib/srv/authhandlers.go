@@ -17,6 +17,8 @@ limitations under the License.
 package srv
 
 import (
+	"crypto/ecdsa"
+	"crypto/rsa"
 	"fmt"
 	"net"
 	"os"
@@ -27,6 +29,7 @@ import (
 
 	"github.com/gravitational/teleport"
 	"github.com/gravitational/teleport/lib/auth"
+	"github.com/gravitational/teleport/lib/defaults"
 	"github.com/gravitational/teleport/lib/events"
 	"github.com/gravitational/teleport/lib/services"
 	"github.com/gravitational/teleport/lib/sshutils"
@@ -150,11 +153,18 @@ func (h *AuthHandlers) UserKeyAuth(conn ssh.ConnMetadata, key ssh.PublicKey) (*s
 		h.Debugf("auth attempt, unsupported key type")
 		return nil, trace.BadParameter("unsupported key type: %v", fingerprint)
 	}
+
+	// Validate public key algorithms of certificate and certificate signer.
+	ok = validateCertificateAlgorithm(cert)
+	if !ok {
+		return nil, trace.BadParameter("unsupported certificate type: %v", cert.Type())
+	}
+
+	// Check required fields of certificate.
 	if len(cert.ValidPrincipals) == 0 {
 		h.Debugf("need a valid principal for key")
 		return nil, trace.BadParameter("need a valid principal for key %v", fingerprint)
 	}
-
 	if len(cert.KeyId) == 0 {
 		h.Debugf("need a valid key ID for key")
 		return nil, trace.BadParameter("need a valid key for key %v", fingerprint)
@@ -245,6 +255,14 @@ func (h *AuthHandlers) HostKeyAuth(addr string, remote net.Addr, key ssh.PublicK
 		},
 	})
 
+	// Validate public key algorithms of certificate and certificate signer.
+	cert, ok := key.(*Certificate)
+	if ok {
+		if !validateCertificateAlgorithm(cert) {
+			return trace.BadParameter("unsupported certificate type: %v", cert.Type())
+		}
+	}
+
 	// Check if the given host key was signed by a Teleport certificate
 	// authority (CA) or fallback to host key checking if it's allowed.
 	certChecker := ssh.CertChecker{
@@ -258,7 +276,7 @@ func (h *AuthHandlers) HostKeyAuth(addr string, remote net.Addr, key ssh.PublicK
 	return nil
 }
 
-// hostKeyCallback allows connections to host that present keys only if
+// hostKeyCallback allows connections to hosts that present keys only if
 // strict host key checking is disabled.
 func (h *AuthHandlers) hostKeyCallback(hostname string, remote net.Addr, key ssh.PublicKey) error {
 	// If strict host key checking is enabled, reject host key fallback.
@@ -272,7 +290,7 @@ func (h *AuthHandlers) hostKeyCallback(hostname string, remote net.Addr, key ssh
 
 	// If strict host key checking is not enabled, log that Teleport trusted an
 	// insecure key, but allow the request to go through.
-	h.Warn("Insecure configuration! Strict host key checking disabled, allowing login without checking host key.")
+	h.Warn("Insecure configuration! Strict host key checking disabled, allowing login without checking host key of type %v.", key.Type())
 	return nil
 }
 
@@ -436,6 +454,23 @@ func (h *AuthHandlers) isTeleportNode() bool {
 	}
 
 	return false
+}
+
+func validateCertificateAlgorithm(cert *ssh.Certificate) bool {
+	return validateKeyAlgorithm(cert.Key) && validateKeyAlgorithm(cert.SignatureKey)
+}
+
+func validateKeyAlgorithm(key ssh.PublicKey) bool {
+	k, ok := key.(*rsa.PublicKey)
+	if !ok {
+		return false
+	}
+
+	if k.N.BitLen() != defaults.RSABits {
+		return false
+	}
+
+	return true
 }
 
 // extractRolesFromCert extracts roles from certificate metadata extensions.

@@ -235,6 +235,11 @@ func (fs *FSLocalKeyStore) GetKey(proxyHost string, username string) (*Key, erro
 
 	key := &Key{Pub: pub, Priv: priv, Cert: cert, ProxyHost: proxyHost, TLSCert: tlsCert}
 
+	// Validate the key loaded from disk.
+	err = key.ValidateAlgorithm()
+	if err != nil {
+		return nil, trace.Wrap(err)
+	}
 	certExpiration, err := key.CertValidBefore()
 	if err != nil {
 		return nil, trace.Wrap(err)
@@ -244,10 +249,10 @@ func (fs *FSLocalKeyStore) GetKey(proxyHost string, username string) (*Key, erro
 		return nil, trace.Wrap(err)
 	}
 
-	// TODO(russjones): Note, we may be returning expired certificates here, that
-	// is okay. If the certificates is expired, it's the responsibility of the
-	// TeleportClient to perform cleanup of the certificates and the profile.
-	fs.log.Debugf("Returning SSH certificate %q valid until %q, TLS certificate %q valid until %q",
+	// Note, we may be returning expired certificates here, that is okay. If the
+	// certificates is expired, it's the responsibility of the TeleportClient to
+	// perform cleanup of the certificates and the profile.
+	fs.log.Debugf("Returning SSH certificate %q valid until %q, TLS certificate %q valid until %q.",
 		certFile, certExpiration, tlsCertFile, tlsCertExpiration)
 
 	return key, nil

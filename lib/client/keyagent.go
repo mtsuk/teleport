@@ -281,6 +281,16 @@ func (a *LocalKeyAgent) CheckHostSignature(addr string, remote net.Addr, key ssh
 // ~/.tsh/known_hosts cache and if not found, prompts the user to accept
 // or reject.
 func (a *LocalKeyAgent) checkHostCertificate(key ssh.PublicKey, addr string) bool {
+	// Make sure the key is actually a certificate and was generated using a
+	// valid algorithm.
+	cert, ok := key.(*ssh.Certificate)
+	if !ok {
+		return false
+	}
+	if !validateKeyAlgorithm(cert.Key) || !validateKeyAlgorithm(cert.SignatureKey) {
+		return false
+	}
+
 	// Check the local cache (where all Teleport CAs are placed upon login) to
 	// see if any of them match.
 	keys, err := a.keyStore.GetKnownHostKeys("")
@@ -308,6 +318,11 @@ func (a *LocalKeyAgent) checkHostCertificate(key ssh.PublicKey, addr string) boo
 // or reject.
 func (a *LocalKeyAgent) checkHostKey(addr string, remote net.Addr, key ssh.PublicKey) error {
 	var err error
+
+	//
+	if !validateKeyAlgorithm(key) {
+		return false
+	}
 
 	// Check if this exact host is in the local cache.
 	keys, _ := a.keyStore.GetKnownHostKeys(addr)

@@ -56,6 +56,7 @@ var _ = Suite(&AuthSuite{})
 var _ = fmt.Printf
 
 func (s *AuthSuite) SetUpSuite(c *C) {
+	fmt.Printf("--> testing.Verbose(): %v.\n", testing.Verbose())
 	utils.InitLoggerForTests(testing.Verbose())
 }
 
