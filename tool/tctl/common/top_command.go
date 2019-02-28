@@ -68,10 +68,14 @@ func (c *TopCommand) TryRun(cmd string, client auth.ClientI) (match bool, err er
 			return true, trace.Wrap(err)
 		}
 		err = c.Top(diagClient)
+		if trace.IsConnectionProblem(err) {
+			return true, trace.ConnectionProblem(err,
+				"[CLIENT] Could not connect to metrics service at %v. Is teleport is running with --diag-addr=%v?", *c.diagURL, *c.diagURL)
+		}
+		return true, trace.Wrap(err)
 	default:
 		return false, nil
 	}
-	return true, trace.Wrap(err)
 }
 
 // Top is called to execute "status" CLI command.
@@ -255,7 +259,7 @@ func (c *TopCommand) fetchAndGenerateReport(ctx context.Context, client *roundtr
 func (c *TopCommand) getPrometheusMetrics(client *roundtrip.Client) (map[string]*dto.MetricFamily, error) {
 	re, err := client.Get(context.TODO(), client.Endpoint("metrics"), url.Values{})
 	if err != nil {
-		return nil, trace.Wrap(err)
+		return nil, trace.Wrap(trace.ConvertSystemError(err))
 	}
 	var parser expfmt.TextParser
 	return parser.TextToMetricFamilies(re.Reader())
