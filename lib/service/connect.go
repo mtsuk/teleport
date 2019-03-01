@@ -60,7 +60,6 @@ func (process *TeleportProcess) reconnectToAuthService(role teleport.Role) (*Con
 		case <-process.ExitContext().Done():
 			process.Infof("%v stopping connection attempts, teleport is shutting down.", role)
 			return nil, ErrTeleportExited
-		default:
 		}
 	}
 }

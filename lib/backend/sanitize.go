@@ -33,9 +33,12 @@ const errorMessage = "special characters are not allowed in resource names, plea
 // the path.
 var whitelistPattern = regexp.MustCompile(`^[0-9A-Za-z@_:.\-/]*$`)
 
+// blacklistPattern matches some unallowed combinations
+var blacklistPattern = regexp.MustCompile(`//`)
+
 // isKeySafe checks if the passed in key conforms to whitelist
 func isKeySafe(s []byte) bool {
-	return whitelistPattern.Match(s)
+	return whitelistPattern.Match(s) && !blacklistPattern.Match(s)
 }
 
 // Sanitizer wraps a Backend implementation to make sure all values requested

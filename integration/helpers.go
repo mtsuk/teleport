@@ -70,6 +70,7 @@ func SetTestTimeouts(t time.Duration) {
 	defaults.ServerKeepAliveTTL = t
 	defaults.SessionRefreshPeriod = t
 	defaults.HeartbeatCheckPeriod = t
+	defaults.CachePollPeriod = t
 }
 
 // TeleInstance represents an in-memory instance of a teleport

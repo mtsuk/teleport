@@ -242,10 +242,15 @@ func (a *AuthServer) SetAuditLog(auditLog events.IAuditLog) {
 	a.IAuditLog = auditLog
 }
 
+// GetClusterConfig gets ClusterConfig from the backend.
+func (a *AuthServer) GetClusterConfig(opts ...services.MarshalOption) (services.ClusterConfig, error) {
+	return a.GetCache().GetClusterConfig(opts...)
+}
+
 // GetClusterName returns the domain name that identifies this authority server.
 // Also known as "cluster name"
 func (a *AuthServer) GetClusterName(opts ...services.MarshalOption) (services.ClusterName, error) {
-	return a.GetCache().GetClusterName()
+	return a.GetCache().GetClusterName(opts...)
 }
 
 // GetDomainName returns the domain name that identifies this authority server.
@@ -362,11 +367,11 @@ type certRequest struct {
 
 // GenerateUserCerts is used to generate user certificate, used internally for tests
 func (a *AuthServer) GenerateUserCerts(key []byte, username string, ttl time.Duration, compatibility string) ([]byte, []byte, error) {
-	user, err := a.GetUser(username)
+	user, err := a.Identity.GetUser(username)
 	if err != nil {
 		return nil, nil, trace.Wrap(err)
 	}
-	checker, err := services.FetchRoles(user.GetRoles(), a, user.GetTraits())
+	checker, err := services.FetchRoles(user.GetRoles(), a.Access, user.GetTraits())
 	if err != nil {
 		return nil, nil, trace.Wrap(err)
 	}
@@ -1198,6 +1203,13 @@ func (s *AuthServer) DeleteWebSession(user string, id string) error {
 	return trace.Wrap(s.Identity.DeleteWebSession(user, id))
 }
 
+// NewWatcher returns a new event watcher. In case of an auth server
+// this watcher will return events as seen by the auth server's
+// in memory cache, not the backend.
+func (a *AuthServer) NewWatcher(ctx context.Context, watch services.Watch) (services.Watcher, error) {
+	return a.GetCache().NewWatcher(ctx, watch)
+}
+
 func (a *AuthServer) DeleteRole(name string) error {
 	// check if this role is used by CA or Users
 	users, err := a.Identity.GetUsers()
@@ -1238,6 +1250,87 @@ func (a *AuthServer) NewKeepAliver(ctx context.Context) (services.KeepAliver, er
 	}
 	go k.forwardKeepAlives()
 	return k, nil
+}
+
+// GetCertAuthority returns certificate authority by given id. Parameter loadSigningKeys
+// controls if signing keys are loaded
+func (a *AuthServer) GetCertAuthority(id services.CertAuthID, loadSigningKeys bool, opts ...services.MarshalOption) (services.CertAuthority, error) {
+	return a.GetCache().GetCertAuthority(id, loadSigningKeys, opts...)
+}
+
+// GetCertAuthorities returns a list of authorities of a given type
+// loadSigningKeys controls whether signing keys should be loaded or not
+func (a *AuthServer) GetCertAuthorities(caType services.CertAuthType, loadSigningKeys bool, opts ...services.MarshalOption) ([]services.CertAuthority, error) {
+	return a.GetCache().GetCertAuthorities(caType, loadSigningKeys, opts...)
+}
+
+// GetStaticTokens gets the list of static tokens used to provision nodes.
+func (a *AuthServer) GetStaticTokens() (services.StaticTokens, error) {
+	return a.GetCache().GetStaticTokens()
+}
+
+// GetToken finds and returns token by ID
+func (a *AuthServer) GetToken(token string) (services.ProvisionToken, error) {
+	return a.GetCache().GetToken(token)
+}
+
+// GetRoles is a part of auth.AccessPoint implementation
+func (a *AuthServer) GetRoles() ([]services.Role, error) {
+	return a.GetCache().GetRoles()
+}
+
+// GetRole is a part of auth.AccessPoint implementation
+func (a *AuthServer) GetRole(name string) (services.Role, error) {
+	return a.GetCache().GetRole(name)
+}
+
+// GetNamespace returns namespace
+func (a *AuthServer) GetNamespace(name string) (*services.Namespace, error) {
+	return a.GetCache().GetNamespace(name)
+}
+
+// GetNamespaces is a part of auth.AccessPoint implementation
+func (a *AuthServer) GetNamespaces() ([]services.Namespace, error) {
+	return a.GetCache().GetNamespaces()
+}
+
+// GetNodes is a part of auth.AccessPoint implementation
+func (a *AuthServer) GetNodes(namespace string, opts ...services.MarshalOption) ([]services.Server, error) {
+	return a.GetCache().GetNodes(namespace, opts...)
+}
+
+// GetProxies is a part of auth.AccessPoint implementation
+func (a *AuthServer) GetReverseTunnels() ([]services.ReverseTunnel, error) {
+	return a.GetCache().GetReverseTunnels()
+}
+
+// GetProxies is a part of auth.AccessPoint implementation
+func (a *AuthServer) GetProxies() ([]services.Server, error) {
+	return a.GetCache().GetProxies()
+}
+
+// GetUser is a part of auth.AccessPoint implementation.
+func (a *AuthServer) GetUser(name string) (user services.User, err error) {
+	return a.GetCache().GetUser(name)
+}
+
+// GetUsers is a part of auth.AccessPoint implementation
+func (a *AuthServer) GetUsers() (users []services.User, err error) {
+	return a.GetCache().GetUsers()
+}
+
+// GetTunnelConnections is a part of auth.AccessPoint implementation
+// GetTunnelConnections are not using recent cache as they are designed
+// to be called periodically and always return fresh data
+func (a *AuthServer) GetTunnelConnections(clusterName string, opts ...services.MarshalOption) ([]services.TunnelConnection, error) {
+	return a.GetCache().GetTunnelConnections(clusterName, opts...)
+}
+
+// GetAllTunnelConnections is a part of auth.AccessPoint implementation
+// GetAllTunnelConnections are not using recent cache, as they are designed
+// to be called periodically and always return fresh data
+func (a *AuthServer) GetAllTunnelConnections(opts ...services.MarshalOption) (conns []services.TunnelConnection, err error) {
+	return a.GetCache().GetAllTunnelConnections(opts...)
 }
 
 // authKeepAliver is a keep aliver using auth server directly

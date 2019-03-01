@@ -36,10 +36,17 @@ import (
 func ForAuth(cfg Config) Config {
 	cfg.Watches = []services.WatchKind{
 		{Kind: services.KindCertAuthority, LoadSecrets: true},
-		{Kind: services.KindStaticTokens},
-		{Kind: services.KindToken},
 		{Kind: services.KindClusterName},
 		{Kind: services.KindClusterConfig},
+		{Kind: services.KindStaticTokens},
+		{Kind: services.KindToken},
+		{Kind: services.KindUser},
+		{Kind: services.KindRole},
+		{Kind: services.KindNamespace},
+		{Kind: services.KindNode},
+		{Kind: services.KindProxy},
+		{Kind: services.KindReverseTunnel},
+		{Kind: services.KindTunnelConnection},
 	}
 	return cfg
 }
@@ -104,6 +111,7 @@ type Cache struct {
 	usersCache         services.UsersService
 	accessCache        services.Access
 	presenceCache      services.Presence
+	eventsCache        services.Events
 
 	// closedFlag is set to indicate that the services are closed
 	closedFlag int32
@@ -255,6 +263,7 @@ func New(config Config) (*Cache, error) {
 		usersCache:         local.NewIdentityService(wrapper),
 		accessCache:        local.NewAccessService(wrapper),
 		presenceCache:      local.NewPresenceService(wrapper),
+		eventsCache:        local.NewEventsService(config.Backend),
 		Entry: log.WithFields(log.Fields{
 			trace.Component: config.Component,
 		}),
@@ -276,6 +285,15 @@ func New(config Config) (*Cache, error) {
 	}
 	go cs.update()
 	return cs, nil
+}
+
+// NewWatcher returns a new event watcher. In case of a cache
+// this watcher will return events as seen by the cache,
+// not the backend. This feature allows auth server
+// to handle subscribers connected to the in-memory caches
+// instead of reading from the backend.
+func (c *Cache) NewWatcher(ctx context.Context, watch services.Watch) (services.Watcher, error) {
+	return c.eventsCache.NewWatcher(ctx, watch)
 }
 
 func (c *Cache) isClosed() bool {

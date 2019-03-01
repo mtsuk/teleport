@@ -33,6 +33,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"golang.org/x/crypto/ssh"
 
@@ -960,7 +961,13 @@ func (process *TeleportProcess) initAuthService() error {
 
 	var authCache auth.AuthCache
 	if process.Config.CachePolicy.Enabled {
-		cache, err := process.newAccessCache(authServer.AuthServices, cache.ForAuth, []string{teleport.ComponentAuth}, true)
+		cache, err := process.newAccessCache(accessCacheConfig{
+			services:  authServer.AuthServices,
+			setup:     cache.ForAuth,
+			cacheName: []string{teleport.ComponentAuth},
+			inMemory:  true,
+			events:    true,
+		})
 		if err != nil {
 			return trace.Wrap(err)
 		}
@@ -1156,33 +1163,73 @@ func (process *TeleportProcess) onExit(serviceName string, callback func(interfa
 	})
 }
 
+// accessCacheConfig contains
+// configuration for access cache
+type accessCacheConfig struct {
+	// services is a collection
+	// of services to use as a cache base
+	services services.Services
+	// setup is a function that takes
+	// cache configuration and modifies it
+	setup cache.SetupConfigFn
+	// cacheName is a cache name
+	cacheName []string
+	// inMemory is true if cache
+	// should use memory
+	inMemory bool
+	// events is true if cache should turn on events
+	events bool
+	// pollPeriod contains period for polling
+	pollPeriod time.Duration
+}
+
+func (c *accessCacheConfig) CheckAndSetDefaults() error {
+	if c.services == nil {
+		return trace.BadParameter("missing parameter services")
+	}
+	if c.setup == nil {
+		return trace.BadParameter("missing parameter setup")
+	}
+	if len(c.cacheName) == 0 {
+		return trace.BadParameter("missing parameter cacheName")
+	}
+	if c.pollPeriod == 0 {
+		c.pollPeriod = defaults.CachePollPeriod
+	}
+	return nil
+}
+
 // newAccessCache returns new local cache access point
-func (process *TeleportProcess) newAccessCache(clt services.Services, setupConfig cache.SetupConfigFn, cacheName []string, memory bool) (*cache.Cache, error) {
-	path := filepath.Join(append([]string{process.Config.DataDir, "cache"}, cacheName...)...)
+func (process *TeleportProcess) newAccessCache(cfg accessCacheConfig) (*cache.Cache, error) {
+	if err := cfg.CheckAndSetDefaults(); err != nil {
+		return nil, trace.Wrap(err)
+	}
+	path := filepath.Join(append([]string{process.Config.DataDir, "cache"}, cfg.cacheName...)...)
 	if err := os.MkdirAll(path, teleport.SharedDirMode); err != nil {
 		return nil, trace.ConvertSystemError(err)
 	}
 	cacheBackend, err := lite.NewWithConfig(process.ExitContext(),
 		lite.Config{
-			Path:      path,
-			EventsOff: true,
-			Memory:    memory,
-			Mirror:    true,
+			Path:             path,
+			EventsOff:        !cfg.events,
+			Memory:           cfg.inMemory,
+			Mirror:           true,
+			PollStreamPeriod: 100 * time.Millisecond,
 		})
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
-	return cache.New(setupConfig(cache.Config{
+	return cache.New(cfg.setup(cache.Config{
 		Context:       process.ExitContext(),
 		Backend:       cacheBackend,
-		Events:        clt,
-		ClusterConfig: clt,
-		Provisioner:   clt,
-		Trust:         clt,
-		Users:         clt,
-		Access:        clt,
-		Presence:      clt,
-		Component:     teleport.Component(append(cacheName, process.id, teleport.ComponentCache)...),
+		Events:        cfg.services,
+		ClusterConfig: cfg.services,
+		Provisioner:   cfg.services,
+		Trust:         cfg.services,
+		Users:         cfg.services,
+		Access:        cfg.services,
+		Presence:      cfg.services,
+		Component:     teleport.Component(append(cfg.cacheName, process.id, teleport.ComponentCache)...),
 	}))
 }
 
@@ -1211,7 +1258,11 @@ func (process *TeleportProcess) newLocalCache(clt auth.ClientI, setupConfig cach
 	if !process.Config.CachePolicy.Enabled {
 		return clt, nil
 	}
-	cache, err := process.newAccessCache(clt, process.setupCachePolicy(setupConfig), cacheName, false)
+	cache, err := process.newAccessCache(accessCacheConfig{
+		services:  clt,
+		setup:     process.setupCachePolicy(setupConfig),
+		cacheName: cacheName,
+	})
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}

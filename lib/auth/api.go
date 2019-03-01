@@ -91,7 +91,6 @@ type ReadAccessPoint interface {
 // AccessPoint is an API interface implemented by a certificate authority (CA)
 type AccessPoint interface {
 	// ReadAccessPoint provides methods to read data
-
 	ReadAccessPoint
 	// Announcer adds methods used to announce presence
 	Announcer
@@ -120,7 +119,7 @@ type AccessCache interface {
 
 // AuthCache is a subset of the interface working on the certificate authorities
 type AuthCache interface {
-	AccessCache
+	ReadAccessPoint
 
 	// GetStaticTokens gets the list of static tokens used to provision nodes.
 	GetStaticTokens() (services.StaticTokens, error)
@@ -130,6 +129,9 @@ type AuthCache interface {
 
 	// GetToken finds and returns token by ID
 	GetToken(token string) (services.ProvisionToken, error)
+
+	// NewWatcher returns a new event watcher
+	NewWatcher(ctx context.Context, watch services.Watch) (services.Watcher, error)
 }
 
 // NewWrapper returns new access point wrapper

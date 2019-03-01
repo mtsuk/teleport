@@ -78,8 +78,8 @@ func (s *PresenceService) GetNamespaces() ([]services.Namespace, error) {
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}
-	out := make([]services.Namespace, len(result.Items))
-	for i, item := range result.Items {
+	out := make([]services.Namespace, 0, len(result.Items))
+	for _, item := range result.Items {
 		if !bytes.HasSuffix(item.Key, []byte(paramsPrefix)) {
 			continue
 		}
@@ -87,7 +87,7 @@ func (s *PresenceService) GetNamespaces() ([]services.Namespace, error) {
 		if err != nil {
 			return nil, trace.Wrap(err)
 		}
-		out[i] = *ns
+		out = append(out, *ns)
 	}
 	sort.Sort(services.SortedNamespaces(out))
 	return out, nil
@@ -95,6 +95,9 @@ func (s *PresenceService) GetNamespaces() ([]services.Namespace, error) {
 
 // UpsertNamespace upserts namespace
 func (s *PresenceService) UpsertNamespace(n services.Namespace) error {
+	if err := n.CheckAndSetDefaults(); err != nil {
+		return trace.Wrap(err)
+	}
 	value, err := services.MarshalNamespace(n)
 	if err != nil {
 		return trace.Wrap(err)

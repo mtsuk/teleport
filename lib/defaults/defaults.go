@@ -308,6 +308,12 @@ var (
 
 	// TopRequestsCapacity sets up default top requests capacity
 	TopRequestsCapacity = 128
+
+	// CachePollPeriod is a period for cache internal events polling,
+	// used in cases when cache is being used to subscribe for events
+	// and this parameter controls how often cache checks for new events
+	// to arrive
+	CachePollPeriod = 500 * time.Millisecond
 )
 
 // Default connection limits, they can be applied separately on any of the Teleport
