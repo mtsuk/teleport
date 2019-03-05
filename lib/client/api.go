@@ -243,6 +243,8 @@ type Config struct {
 }
 
 func (c *Config) CheckAndSetDefaults() error {
+	// Check build flag, if FIPS 140-2, then disable checks in client?
+	return nil
 }
 
 // CachePolicy defines cache policy for local clients
@@ -682,7 +684,7 @@ type ShellCreatedCallback func(s *ssh.Session, c *ssh.Client, terminal io.ReadWr
 
 // NewClient creates a TeleportClient object and fully configures it
 func NewClient(c *Config) (tc *TeleportClient, err error) {
-	err := c.CheckAndSetDefaults()
+	err = c.CheckAndSetDefaults()
 	if err != nil {
 		return nil, trace.Wrap(err)
 	}

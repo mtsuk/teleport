@@ -17,8 +17,6 @@ limitations under the License.
 package srv
 
 import (
-	"crypto/ecdsa"
-	"crypto/rsa"
 	"fmt"
 	"net"
 	"os"
@@ -29,7 +27,6 @@ import (
 
 	"github.com/gravitational/teleport"
 	"github.com/gravitational/teleport/lib/auth"
-	"github.com/gravitational/teleport/lib/defaults"
 	"github.com/gravitational/teleport/lib/events"
 	"github.com/gravitational/teleport/lib/services"
 	"github.com/gravitational/teleport/lib/sshutils"
@@ -155,7 +152,7 @@ func (h *AuthHandlers) UserKeyAuth(conn ssh.ConnMetadata, key ssh.PublicKey) (*s
 	}
 
 	// Validate public key algorithms of certificate and certificate signer.
-	ok = validateCertificateAlgorithm(cert)
+	ok = utils.ValidateCertificateAlgorithm(cert)
 	if !ok {
 		return nil, trace.BadParameter("unsupported certificate type: %v", cert.Type())
 	}
@@ -256,9 +253,9 @@ func (h *AuthHandlers) HostKeyAuth(addr string, remote net.Addr, key ssh.PublicK
 	})
 
 	// Validate public key algorithms of certificate and certificate signer.
-	cert, ok := key.(*Certificate)
+	cert, ok := key.(*ssh.Certificate)
 	if ok {
-		if !validateCertificateAlgorithm(cert) {
+		if !utils.ValidateCertificateAlgorithm(cert) {
 			return trace.BadParameter("unsupported certificate type: %v", cert.Type())
 		}
 	}
@@ -454,23 +451,6 @@ func (h *AuthHandlers) isTeleportNode() bool {
 	}
 
 	return false
-}
-
-func validateCertificateAlgorithm(cert *ssh.Certificate) bool {
-	return validateKeyAlgorithm(cert.Key) && validateKeyAlgorithm(cert.SignatureKey)
-}
-
-func validateKeyAlgorithm(key ssh.PublicKey) bool {
-	k, ok := key.(*rsa.PublicKey)
-	if !ok {
-		return false
-	}
-
-	if k.N.BitLen() != defaults.RSABits {
-		return false
-	}
-
-	return true
 }
 
 // extractRolesFromCert extracts roles from certificate metadata extensions.

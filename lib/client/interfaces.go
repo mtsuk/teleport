@@ -18,7 +18,6 @@ package client
 
 import (
 	"bytes"
-	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -230,7 +229,7 @@ func (k *Key) ValidateAlgorithm() error {
 	}
 	cert, ok := key.(*ssh.Certificate)
 	if !ok {
-		return trace.Wrap("only certificates supported")
+		return trace.BadParameter("only certificates supported")
 	}
 
 	if !utils.ValidateKeyAlgorithm(cert.Key) {

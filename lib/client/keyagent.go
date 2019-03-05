@@ -281,13 +281,13 @@ func (a *LocalKeyAgent) CheckHostSignature(addr string, remote net.Addr, key ssh
 // ~/.tsh/known_hosts cache and if not found, prompts the user to accept
 // or reject.
 func (a *LocalKeyAgent) checkHostCertificate(key ssh.PublicKey, addr string) bool {
-	// Make sure the key is actually a certificate and was generated using a
-	// valid algorithm.
+	// Make sure the SSH certificate (and the signer) both have valid public key
+	// algorithms.
 	cert, ok := key.(*ssh.Certificate)
 	if !ok {
 		return false
 	}
-	if !validateKeyAlgorithm(cert.Key) || !validateKeyAlgorithm(cert.SignatureKey) {
+	if !utils.ValidateCertificateAlgorithm(cert) {
 		return false
 	}
 
@@ -319,9 +319,9 @@ func (a *LocalKeyAgent) checkHostCertificate(key ssh.PublicKey, addr string) boo
 func (a *LocalKeyAgent) checkHostKey(addr string, remote net.Addr, key ssh.PublicKey) error {
 	var err error
 
-	//
-	if !validateKeyAlgorithm(key) {
-		return false
+	// Make sure the SSH key was generated with a valid algorithm.
+	if !utils.ValidateKeyAlgorithm(key) {
+		return trace.BadParameter("unsupported key algorithm")
 	}
 
 	// Check if this exact host is in the local cache.
