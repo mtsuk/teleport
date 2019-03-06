@@ -795,14 +795,14 @@ func (s *server) RemoveSite(domainName string) error {
 }
 
 type remoteConn struct {
-	sshConn      ssh.Conn
-	conn         net.Conn
-	invalid      int32
-	log          *log.Entry
-	counter      int32
-	discoveryC   ssh.Channel
-	discoveryErr error
-	closed       int32
+	sshConn       ssh.Conn
+	conn          net.Conn
+	invalid       int32
+	log           *log.Entry
+	discoveryC    ssh.Channel
+	discoveryErr  error
+	closed        int32
+	lastHeartbeat int64
 }
 
 func (rc *remoteConn) openDiscoveryChannel() (ssh.Channel, error) {
@@ -843,6 +843,16 @@ func (rc *remoteConn) markInvalid(err error) {
 
 func (rc *remoteConn) isInvalid() bool {
 	return atomic.LoadInt32(&rc.invalid) == 1
+}
+
+func (rc *remoteConn) setLastHeartbeat(tm time.Time) {
+	atomic.StoreInt64(&rc.lastHeartbeat, tm.UnixNano())
+}
+
+// isReady returns true when connection is ready to be tried,
+// it returns true when connection has received the first heartbeat
+func (rc *remoteConn) isReady() bool {
+	return atomic.LoadInt64(&rc.lastHeartbeat) != 0
 }
 
 // newRemoteSite helper creates and initializes 'remoteSite' instance

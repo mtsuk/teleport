@@ -1299,7 +1299,7 @@ func (a *AuthServer) GetNodes(namespace string, opts ...services.MarshalOption) 
 	return a.GetCache().GetNodes(namespace, opts...)
 }
 
-// GetProxies is a part of auth.AccessPoint implementation
+// GetReverseTunnels is a part of auth.AccessPoint implementation
 func (a *AuthServer) GetReverseTunnels() ([]services.ReverseTunnel, error) {
 	return a.GetCache().GetReverseTunnels()
 }

@@ -561,7 +561,11 @@ func (c *Cache) GetRoles() ([]services.Role, error) {
 
 // GetRole is a part of auth.AccessPoint implementation
 func (c *Cache) GetRole(name string) (services.Role, error) {
-	return c.accessCache.GetRole(name)
+	role, err := c.accessCache.GetRole(name)
+	if trace.IsNotFound(err) {
+		return c.Access.GetRole(name)
+	}
+	return role, err
 }
 
 // GetNamespace returns namespace
@@ -579,7 +583,7 @@ func (c *Cache) GetNodes(namespace string, opts ...services.MarshalOption) ([]se
 	return c.presenceCache.GetNodes(namespace, opts...)
 }
 
-// GetProxies is a part of auth.AccessPoint implementation
+// GetReverseTunnels is a part of auth.AccessPoint implementation
 func (c *Cache) GetReverseTunnels() ([]services.ReverseTunnel, error) {
 	return c.presenceCache.GetReverseTunnels()
 }
@@ -591,7 +595,11 @@ func (c *Cache) GetProxies() ([]services.Server, error) {
 
 // GetUser is a part of auth.AccessPoint implementation.
 func (c *Cache) GetUser(name string) (user services.User, err error) {
-	return c.usersCache.GetUser(name)
+	u, err := c.usersCache.GetUser(name)
+	if trace.IsNotFound(err) {
+		return c.Users.GetUser(name)
+	}
+	return u, err
 }
 
 // GetUsers is a part of auth.AccessPoint implementation

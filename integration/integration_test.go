@@ -894,7 +894,7 @@ func (s *IntSuite) TestInvalidLogins(c *check.C) {
 	c.Assert(err, check.ErrorMatches, "cluster wrong-site not found")
 }
 
-// TestTwoClusters creates two teleport clusters: "a" and "b" and creates a
+// TestTwoClustersTunnel creates two teleport clusters: "a" and "b" and creates a
 // tunnel from A to B.
 //
 // Two tests are run, first is when both A and B record sessions at nodes. It
@@ -904,7 +904,7 @@ func (s *IntSuite) TestInvalidLogins(c *check.C) {
 // In the second test, sessions are recorded at B. All sessions still show up on
 // A (they are Teleport nodes) but in addition, two show up on B when connecting
 // over the B<->A tunnel because sessions are recorded at the proxy.
-func (s *IntSuite) TestTwoClusters(c *check.C) {
+func (s *IntSuite) TestTwoClustersTunnel(c *check.C) {
 	now := time.Now().In(time.UTC).Round(time.Second)
 
 	var tests = []struct {
@@ -979,7 +979,7 @@ func (s *IntSuite) TestTwoClusters(c *check.C) {
 		for len(b.Tunnel.GetSites()) < 2 && len(b.Tunnel.GetSites()) < 2 {
 			time.Sleep(time.Millisecond * 200)
 			if time.Now().After(abortTime) {
-				c.Fatalf("two sites do not see each other: tunnels are not working")
+				c.Fatalf("Two clusters do not see each other: tunnels are not working.")
 			}
 		}
 
@@ -998,7 +998,7 @@ func (s *IntSuite) TestTwoClusters(c *check.C) {
 		// directly:
 		tc, err := a.NewClient(ClientConfig{
 			Login:        username,
-			Cluster:      "site-A",
+			Cluster:      a.Secrets.SiteName,
 			Host:         Host,
 			Port:         sshPort,
 			ForwardAgent: true,
@@ -1028,10 +1028,13 @@ func (s *IntSuite) TestTwoClusters(c *check.C) {
 		c.Assert(ok, check.Equals, true)
 		c.Assert(roots.Subjects(), check.HasLen, 2)
 
+		// wait for active tunnel connections to be established
+		waitForActiveTunnelConnections(c, b, a.Secrets.SiteName, 1)
+
 		// via tunnel b->a:
 		tc, err = b.NewClient(ClientConfig{
 			Login:        username,
-			Cluster:      "site-A",
+			Cluster:      a.Secrets.SiteName,
 			Host:         Host,
 			Port:         sshPort,
 			ForwardAgent: true,
@@ -1046,7 +1049,7 @@ func (s *IntSuite) TestTwoClusters(c *check.C) {
 		a.Stop(false)
 		err = tc.SSH(context.TODO(), cmd, false)
 		// debug mode will add more lines, so this check has to be flexible
-		c.Assert(strings.Replace(err.Error(), "\n", "", -1), check.Matches, `.*site-A is offline.*`)
+		c.Assert(strings.Replace(err.Error(), "\n", "", -1), check.Matches, fmt.Sprintf(`.*%v is offline.*`, a.Secrets.SiteName))
 
 		// Reset and start "Site-A" again
 		a.Reset()
@@ -1090,11 +1093,11 @@ func (s *IntSuite) TestTwoClusters(c *check.C) {
 			}
 		}
 
-		siteA := a.GetSiteAPI("site-A")
+		siteA := a.GetSiteAPI(a.Secrets.SiteName)
 		err = searchAndAssert(siteA, tt.outExecCountSiteA)
 		c.Assert(err, check.IsNil)
 
-		siteB := b.GetSiteAPI("site-B")
+		siteB := b.GetSiteAPI(b.Secrets.SiteName)
 		err = searchAndAssert(siteB, tt.outExecCountSiteB)
 		c.Assert(err, check.IsNil)
 
@@ -1660,9 +1663,9 @@ func (s *IntSuite) TestDiscovery(c *check.C) {
 	// add second proxy as a backend to the load balancer
 	lb.AddBackend(*utils.MustParseAddr(net.JoinHostPort(Loopback, strconv.Itoa(proxyReverseTunnelPort))))
 
-	// At this point the remote cluster should be connected to two proxies in
-	// the main cluster.
-	waitForProxyCount(remote, "cluster-main", 2)
+	// At this point the main cluster should observe two tunnels
+	// connected to it from remote cluster
+	waitForTunnelConnections(c, main, remote.Secrets.SiteName, 2)
 
 	// execute the connection via first proxy
 	cfg := ClientConfig{
@@ -1723,6 +1726,25 @@ func (s *IntSuite) TestDiscovery(c *check.C) {
 	c.Assert(main.Stop(true), check.IsNil)
 }
 
+// waitForActiveTunnelConnections  waits for remote cluster to report a minimum number of active connections
+func waitForActiveTunnelConnections(c *check.C, t *TeleInstance, clusterName string, expectedCount int) {
+	var lastCount int
+	var lastErr error
+	for i := 0; i < 20; i++ {
+		cluster, err := t.Tunnel.GetSite(clusterName)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		lastCount = cluster.GetTunnelsCount()
+		if lastCount >= expectedCount {
+			return
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	c.Fatalf("Connections count on %v: %v, expected %v, last error: %v", clusterName, lastCount, expectedCount, lastErr)
+}
+
 // waitForProxyCount waits a set time for the proxy count in clusterName to
 // reach some value.
 func waitForProxyCount(t *TeleInstance, clusterName string, count int) error {
@@ -1738,6 +1760,22 @@ func waitForProxyCount(t *TeleInstance, clusterName string, count int) error {
 	}
 
 	return trace.BadParameter("proxy count on %v: %v", clusterName, counts[clusterName])
+}
+
+// waitForTunnelConnections waits for remote tunnels connections
+func waitForTunnelConnections(c *check.C, t *TeleInstance, clusterName string, expectedCount int) {
+	var conns []services.TunnelConnection
+	for i := 0; i < 20; i++ {
+		conns, err := t.Process.GetAuthServer().Presence.GetTunnelConnections(clusterName)
+		if err != nil {
+			c.Fatal(err)
+		}
+		if len(conns) >= expectedCount {
+			return
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	c.Fatalf("proxy count on %v: %v, expected %v", clusterName, len(conns), expectedCount)
 }
 
 // TestExternalClient tests if we can connect to a node in a Teleport

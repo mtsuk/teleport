@@ -585,7 +585,7 @@ func UnmarshalServerResource(data []byte, kind string, cfg *MarshalConfig) (Serv
 				return nil, trace.BadParameter(err.Error())
 			}
 		}
-
+		s.Kind = kind
 		if err := s.CheckAndSetDefaults(); err != nil {
 			return nil, trace.Wrap(err)
 		}
