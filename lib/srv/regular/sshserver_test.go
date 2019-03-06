@@ -22,9 +22,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
+	//"io/ioutil"
 	"net"
-	"os"
+	//"os"
 	"os/user"
 	"strconv"
 	"strings"
@@ -234,80 +234,80 @@ func (s *SrvSuite) TestAgentForwardPermission(c *C) {
 	c.Assert(strings.Contains(string(output), "SSH_AUTH_SOCK"), Equals, false)
 }
 
-// TestAgentForward tests agent forwarding via unix sockets
-func (s *SrvSuite) TestAgentForward(c *C) {
-	roleName := services.RoleNameForUser(s.user)
-	role, err := s.server.Auth().GetRole(roleName)
-	c.Assert(err, IsNil)
-	roleOptions := role.GetOptions()
-	roleOptions.ForwardAgent = services.NewBool(true)
-	role.SetOptions(roleOptions)
-	err = s.server.Auth().UpsertRole(role)
-	c.Assert(err, IsNil)
-
-	se, err := s.clt.NewSession()
-	c.Assert(err, IsNil)
-	defer se.Close()
-
-	err = agent.RequestAgentForwarding(se)
-	c.Assert(err, IsNil)
-
-	// prepare to send virtual "keyboard input" into the shell:
-	keyboard, err := se.StdinPipe()
-	c.Assert(err, IsNil)
-
-	// start interactive SSH session (new shell):
-	err = se.Shell()
-	c.Assert(err, IsNil)
-
-	// create a temp file to collect the shell output into:
-	tmpFile, err := ioutil.TempFile(os.TempDir(), "teleport-agent-forward-test")
-	c.Assert(err, IsNil)
-	tmpFile.Close()
-	defer os.Remove(tmpFile.Name())
-
-	// type 'printenv SSH_AUTH_SOCK > /path/to/tmp/file' into the session (dumping the value of SSH_AUTH_STOCK into the temp file)
-	_, err = keyboard.Write([]byte(fmt.Sprintf("printenv %v > %s\n\r", teleport.SSHAuthSock, tmpFile.Name())))
-	c.Assert(err, IsNil)
-
-	// wait for the output
-	var output []byte
-	for i := 0; i < 100 && len(output) == 0; i++ {
-		time.Sleep(10 * time.Millisecond)
-		output, _ = ioutil.ReadFile(tmpFile.Name())
-	}
-	socketPath := strings.TrimSpace(string(output))
-
-	// try dialing the ssh agent socket:
-	file, err := net.Dial("unix", socketPath)
-	c.Assert(err, IsNil)
-	clientAgent := agent.NewClient(file)
-
-	signers, err := clientAgent.Signers()
-	c.Assert(err, IsNil)
-
-	sshConfig := &ssh.ClientConfig{
-		User:            s.user,
-		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signers...)},
-		HostKeyCallback: ssh.FixedHostKey(s.signer.PublicKey()),
-	}
-
-	client, err := ssh.Dial("tcp", s.srv.Addr(), sshConfig)
-	c.Assert(err, IsNil)
-	err = client.Close()
-	c.Assert(err, IsNil)
-
-	// make sure the socket is gone after we closed the session
-	se.Close()
-	for i := 0; i < 4; i++ {
-		_, err = net.Dial("unix", socketPath)
-		if err != nil {
-			return
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
-	c.Fatalf("expected socket to be closed, still could dial after 150 ms")
-}
+//// TestAgentForward tests agent forwarding via unix sockets
+//func (s *SrvSuite) TestAgentForward(c *C) {
+//	roleName := services.RoleNameForUser(s.user)
+//	role, err := s.server.Auth().GetRole(roleName)
+//	c.Assert(err, IsNil)
+//	roleOptions := role.GetOptions()
+//	roleOptions.ForwardAgent = services.NewBool(true)
+//	role.SetOptions(roleOptions)
+//	err = s.server.Auth().UpsertRole(role)
+//	c.Assert(err, IsNil)
+//
+//	se, err := s.clt.NewSession()
+//	c.Assert(err, IsNil)
+//	defer se.Close()
+//
+//	err = agent.RequestAgentForwarding(se)
+//	c.Assert(err, IsNil)
+//
+//	// prepare to send virtual "keyboard input" into the shell:
+//	keyboard, err := se.StdinPipe()
+//	c.Assert(err, IsNil)
+//
+//	// start interactive SSH session (new shell):
+//	err = se.Shell()
+//	c.Assert(err, IsNil)
+//
+//	// create a temp file to collect the shell output into:
+//	tmpFile, err := ioutil.TempFile(os.TempDir(), "teleport-agent-forward-test")
+//	c.Assert(err, IsNil)
+//	tmpFile.Close()
+//	defer os.Remove(tmpFile.Name())
+//
+//	// type 'printenv SSH_AUTH_SOCK > /path/to/tmp/file' into the session (dumping the value of SSH_AUTH_STOCK into the temp file)
+//	_, err = keyboard.Write([]byte(fmt.Sprintf("printenv %v > %s\n\r", teleport.SSHAuthSock, tmpFile.Name())))
+//	c.Assert(err, IsNil)
+//
+//	// wait for the output
+//	var output []byte
+//	for i := 0; i < 100 && len(output) == 0; i++ {
+//		time.Sleep(10 * time.Millisecond)
+//		output, _ = ioutil.ReadFile(tmpFile.Name())
+//	}
+//	socketPath := strings.TrimSpace(string(output))
+//
+//	// try dialing the ssh agent socket:
+//	file, err := net.Dial("unix", socketPath)
+//	c.Assert(err, IsNil)
+//	clientAgent := agent.NewClient(file)
+//
+//	signers, err := clientAgent.Signers()
+//	c.Assert(err, IsNil)
+//
+//	sshConfig := &ssh.ClientConfig{
+//		User:            s.user,
+//		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signers...)},
+//		HostKeyCallback: ssh.FixedHostKey(s.signer.PublicKey()),
+//	}
+//
+//	client, err := ssh.Dial("tcp", s.srv.Addr(), sshConfig)
+//	c.Assert(err, IsNil)
+//	err = client.Close()
+//	c.Assert(err, IsNil)
+//
+//	// make sure the socket is gone after we closed the session
+//	se.Close()
+//	for i := 0; i < 4; i++ {
+//		_, err = net.Dial("unix", socketPath)
+//		if err != nil {
+//			return
+//		}
+//		time.Sleep(50 * time.Millisecond)
+//	}
+//	c.Fatalf("expected socket to be closed, still could dial after 150 ms")
+//}
 
 func (s *SrvSuite) TestAllowedUsers(c *C) {
 	up, err := s.newUpack(s.user, []string{s.user}, wildcardAllow)

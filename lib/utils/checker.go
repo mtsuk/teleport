@@ -30,49 +30,60 @@ type CertChecker struct {
 }
 
 func (c *CertChecker) Authenticate(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
-	if !validate(key) {
-		return nil, trace.BadParameter("unsupported key algorithm")
+	err := validate(key)
+	if err != nil {
+		return nil, trace.Wrap(err)
 	}
 
 	return c.CertChecker.Authenticate(conn, key)
 }
 func (c *CertChecker) CheckCert(principal string, cert *ssh.Certificate) error {
-	if !validate(cert) {
-		return trace.BadParameter("unsupported key algorithm")
+	err := validate(cert)
+	if err != nil {
+		return trace.Wrap(err)
 	}
 
 	return c.CertChecker.CheckCert(principal, cert)
 }
 
 func (c *CertChecker) CheckHostKey(addr string, remote net.Addr, key ssh.PublicKey) error {
-	if !validate(key) {
-		return trace.BadParameter("unsupported key algorithm")
+	err := validate(key)
+	if err != nil {
+		return trace.Wrap(err)
 	}
 
 	return c.CertChecker.CheckHostKey(addr, remote, key)
 }
 
-func validate(key ssh.PublicKey) bool {
+func validate(key ssh.PublicKey) error {
 	switch cert := key.(type) {
 	case *ssh.Certificate:
-		return validateAlgorithm(cert.Key) && validateAlgorithm(cert.SignatureKey)
+		err := validateAlgorithm(cert.Key)
+		if err != nil {
+			return trace.Wrap(err)
+		}
+		err = validateAlgorithm(cert.SignatureKey)
+		if err != nil {
+			return trace.Wrap(err)
+		}
+		return nil
 	default:
 		return validateAlgorithm(key)
 	}
 }
 
-func validateAlgorithm(key ssh.PublicKey) bool {
+func validateAlgorithm(key ssh.PublicKey) error {
 	cryptoKey, ok := key.(ssh.CryptoPublicKey)
 	if !ok {
-		return false
+		return trace.BadParameter("unable to determine underlying public key")
 	}
 	k, ok := cryptoKey.CryptoPublicKey().(*rsa.PublicKey)
 	if !ok {
-		return false
+		return trace.BadParameter("only RSA keys supported")
 	}
 	if k.N.BitLen() != 2048 {
-		return false
+		return trace.BadParameter("found %v-bit key, only 2048-bit supported", k.N.BitLen())
 	}
 
-	return true
+	return nil
 }

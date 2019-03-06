@@ -47,20 +47,20 @@ func (s *CheckerSuite) TestValidate(c *check.C) {
 	cryptoKey := rsaKey.Public()
 	sshKey, err := ssh.NewPublicKey(cryptoKey)
 	c.Assert(err, check.IsNil)
-	ok := validate(sshKey)
-	c.Assert(ok, check.Equals, true)
+	err = validate(sshKey)
+	c.Assert(err, check.IsNil)
 
 	// 1024-bit RSA keys are not valid.
 	cryptoKey = smallRSAKey.Public()
 	sshKey, err = ssh.NewPublicKey(cryptoKey)
 	c.Assert(err, check.IsNil)
-	ok = validate(sshKey)
-	c.Assert(ok, check.Equals, false)
+	err = validate(sshKey)
+	c.Assert(err, check.NotNil)
 
 	// ECDSA keys are not valid.
 	cryptoKey = ellipticKey.Public()
 	sshKey, err = ssh.NewPublicKey(cryptoKey)
 	c.Assert(err, check.IsNil)
-	ok = validate(sshKey)
-	c.Assert(ok, check.Equals, false)
+	err = validate(sshKey)
+	c.Assert(err, check.NotNil)
 }
