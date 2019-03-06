@@ -51,7 +51,9 @@ func (s *MuxSuite) SetUpSuite(c *check.C) {
 
 	var err error
 
-	s.signer, err = ssh.ParsePrivateKey(fixtures.PEMBytes["ecdsa"])
+	pemBytes, ok := fixtures.PEMBytes["rsa"]
+	c.Assert(ok, check.Equals, true)
+	s.signer, err = ssh.ParsePrivateKey(pemBytes)
 	c.Assert(err, check.IsNil)
 }
 

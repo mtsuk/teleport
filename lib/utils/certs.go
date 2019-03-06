@@ -25,8 +25,6 @@ import (
 	"math/big"
 	"time"
 
-	"golang.org/x/crypto/ssh"
-
 	"github.com/gravitational/trace"
 
 	"github.com/sirupsen/logrus"
@@ -257,30 +255,6 @@ func ReadCertificateChain(certificateChainBytes []byte) ([]*x509.Certificate, er
 	}
 
 	return x509Chain, nil
-}
-
-// ValidateCertificateAlgorithm checks if the SSH certificate was issued
-// using a valid algorithm.
-func ValidateCertificateAlgorithm(cert *ssh.Certificate) bool {
-	return ValidateKeyAlgorithm(cert.Key) && ValidateKeyAlgorithm(cert.SignatureKey)
-}
-
-// ValidateKeyAlgorithm checks if the SSH key was issued with a valid
-// algorithm. At the moment this is only 2048-bit RSA.
-func ValidateKeyAlgorithm(key ssh.PublicKey) bool {
-	cryptoKey, ok := key.(ssh.CryptoPublicKey)
-	if !ok {
-		return false
-	}
-	k, ok := cryptoKey.CryptoPublicKey().(*rsa.PublicKey)
-	if !ok {
-		return false
-	}
-	if k.N.BitLen() != 2048 {
-		return false
-	}
-
-	return true
 }
 
 const pemBlockCertificate = "CERTIFICATE"

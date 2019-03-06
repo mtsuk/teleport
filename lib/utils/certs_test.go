@@ -17,14 +17,8 @@ limitations under the License.
 package utils
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
-	"crypto/rsa"
 	"fmt"
 	"io/ioutil"
-
-	"golang.org/x/crypto/ssh"
 
 	"github.com/gravitational/trace"
 
@@ -50,36 +44,4 @@ func (s *CertsSuite) TestRejectsSelfSignedCertificate(c *check.C) {
 
 	err = VerifyCertificateChain(certificateChain)
 	c.Assert(err, check.ErrorMatches, "x509: certificate signed by unknown authority")
-}
-
-// TestValidateKeyAlgorithm makes sure the public key is a valid algorithm
-// that Teleport supports.
-func (s *CertsSuite) TestValidateKeyAlgorithm(c *check.C) {
-	rsaKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	c.Assert(err, check.IsNil)
-	smallRSAKey, err := rsa.GenerateKey(rand.Reader, 1024)
-	c.Assert(err, check.IsNil)
-	ellipticKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	c.Assert(err, check.IsNil)
-
-	// 2048-bit RSA keys are valid.
-	cryptoKey := rsaKey.Public()
-	sshKey, err := ssh.NewPublicKey(cryptoKey)
-	c.Assert(err, check.IsNil)
-	ok := ValidateKeyAlgorithm(sshKey)
-	c.Assert(ok, check.Equals, true)
-
-	// 1024-bit RSA keys are not valid.
-	cryptoKey = smallRSAKey.Public()
-	sshKey, err = ssh.NewPublicKey(cryptoKey)
-	c.Assert(err, check.IsNil)
-	ok = ValidateKeyAlgorithm(sshKey)
-	c.Assert(ok, check.Equals, false)
-
-	// ECDSA keys are not valid.
-	cryptoKey = ellipticKey.Public()
-	sshKey, err = ssh.NewPublicKey(cryptoKey)
-	c.Assert(err, check.IsNil)
-	ok = ValidateKeyAlgorithm(sshKey)
-	c.Assert(ok, check.Equals, false)
 }

@@ -151,12 +151,6 @@ func (h *AuthHandlers) UserKeyAuth(conn ssh.ConnMetadata, key ssh.PublicKey) (*s
 		return nil, trace.BadParameter("unsupported key type: %v", fingerprint)
 	}
 
-	// Validate public key algorithms of certificate and certificate signer.
-	ok = utils.ValidateCertificateAlgorithm(cert)
-	if !ok {
-		return nil, trace.BadParameter("unsupported certificate type: %v", cert.Type())
-	}
-
 	// Check required fields of certificate.
 	if len(cert.ValidPrincipals) == 0 {
 		h.Debugf("need a valid principal for key")
@@ -179,13 +173,16 @@ func (h *AuthHandlers) UserKeyAuth(conn ssh.ConnMetadata, key ssh.PublicKey) (*s
 		h.AuditLog.EmitAuditEvent(events.AuthAttemptEvent, fields)
 	}
 
-	certChecker := ssh.CertChecker{IsUserAuthority: h.IsUserAuthority}
+	// Check that the user certificate uses supported public key algorithms, was
+	// issued by Teleport, and check the certificate metadata (principals,
+	// timestamp, etc). Fallback to keys is not supported.
+	certChecker := utils.CertChecker{
+		ssh.CertChecker{
+			IsUserAuthority: h.IsUserAuthority,
+		},
+	}
 	permissions, err := certChecker.Authenticate(conn, key)
 	if err != nil {
-		recordFailedLogin(err)
-		return nil, trace.Wrap(err)
-	}
-	if err := certChecker.CheckCert(conn.User(), cert); err != nil {
 		recordFailedLogin(err)
 		return nil, trace.Wrap(err)
 	}
@@ -252,19 +249,13 @@ func (h *AuthHandlers) HostKeyAuth(addr string, remote net.Addr, key ssh.PublicK
 		},
 	})
 
-	// Validate public key algorithms of certificate and certificate signer.
-	cert, ok := key.(*ssh.Certificate)
-	if ok {
-		if !utils.ValidateCertificateAlgorithm(cert) {
-			return trace.BadParameter("unsupported certificate type: %v", cert.Type())
-		}
-	}
-
 	// Check if the given host key was signed by a Teleport certificate
 	// authority (CA) or fallback to host key checking if it's allowed.
-	certChecker := ssh.CertChecker{
-		IsHostAuthority: h.IsHostAuthority,
-		HostKeyFallback: h.hostKeyCallback,
+	certChecker := utils.CertChecker{
+		ssh.CertChecker{
+			IsHostAuthority: h.IsHostAuthority,
+			HostKeyFallback: h.hostKeyCallback,
+		},
 	}
 	err := certChecker.CheckHostKey(addr, remote, key)
 	if err != nil {

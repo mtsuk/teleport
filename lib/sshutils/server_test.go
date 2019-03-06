@@ -43,7 +43,10 @@ func (s *ServerSuite) SetUpSuite(c *C) {
 
 	var err error
 
-	s.signer, err = ssh.ParsePrivateKey(fixtures.PEMBytes["ecdsa"])
+	pemBytes, ok := fixtures.PEMBytes["rsa"]
+	c.Assert(ok, Equals, true)
+
+	s.signer, err = ssh.ParsePrivateKey(pemBytes)
 	c.Assert(err, IsNil)
 }
 

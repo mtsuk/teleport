@@ -220,9 +220,8 @@ func (k *Key) AsAuthMethod() (ssh.AuthMethod, error) {
 	return NewAuthMethodForCert(signer), nil
 }
 
-// ValidateAlgorithm makes sure the SSH certificate (and the signer of
-// certificate) are both using a supported public key algorithm.
-func (k *Key) ValidateAlgorithm() error {
+// CheckCert makes sure the SSH certificate is valid.
+func (k *Key) CheckCert() error {
 	key, _, _, _, err := ssh.ParseAuthorizedKey(k.Cert)
 	if err != nil {
 		return trace.Wrap(err)
@@ -230,10 +229,18 @@ func (k *Key) ValidateAlgorithm() error {
 
 	cert, ok := key.(*ssh.Certificate)
 	if !ok {
-		return trace.BadParameter("only certificates supported")
+		return trace.BadParameter("key found, not certificate")
 	}
-	if !utils.ValidateCertificateAlgorithm(cert) {
-		return trace.BadParameterError("invalid certificate algorithm")
+	if len(cert.ValidPrincipals) == 0 {
+		return trace.BadParameter("principals are required")
+	}
+
+	// A valid principal is always passed in because the principals are not being
+	// checked here, but rather the validity period, signature, and algorithms.
+	certChecker := utils.CertChecker{}
+	err = certChecker.CheckCert(cert.ValidPrincipals[0], cert)
+	if err != nil {
+		return trace.Wrap(err)
 	}
 
 	return nil
